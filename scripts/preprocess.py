@@ -10,6 +10,8 @@ Writes to ``data/processed/``:
     user_id, item_id, rating, timestamp for all 100,000 ratings.
 ``items.parquet``
     item_id, title, release_year and one column per genre flag.
+``train.parquet``, ``val.parquet``, ``test.parquet``
+    The per-user temporal split, written once so nothing recomputes it at runtime.
 
 It also prints a data card.  Those numbers go straight into the dataset section of the
 report, so they are computed here once rather than retyped from memory.
@@ -21,6 +23,10 @@ from src.config import load_config
 from src.data.loaders import genre_columns
 from src.data.loaders import load_items
 from src.data.loaders import load_ratings
+from src.data.splitting import assert_no_leakage
+from src.data.splitting import split_summary
+from src.data.splitting import temporal_split
+from src.data.splitting import write_splits
 
 RATINGS_OUTPUT = "ratings.parquet"
 ITEMS_OUTPUT = "items.parquet"
@@ -86,6 +92,18 @@ def main():
     print("wrote " + str(items_path))
 
     print_data_card(ratings, items)
+
+    train, val, test = temporal_split(ratings, config)
+    assert_no_leakage(train, val, test)
+    paths = write_splits(train, val, test, processed_dir)
+    for name in ["train", "val", "test"]:
+        print("wrote " + str(paths[name]))
+
+    print("")
+    print("split summary")
+    print("-------------")
+    print(split_summary(train, val, test).to_string(index=False))
+    print("")
 
 
 if __name__ == "__main__":
