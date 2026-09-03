@@ -1,0 +1,62 @@
+# Single source of truth for every run in this project.
+#
+# Nothing outside this file sets a seed, a split ratio or a hyperparameter.  If a number
+# here changes, every CSV in results/ has to be regenerated.
+
+seed: 20260903
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed
+  fits_dir: data/processed/fits
+  results_dir: results
+  figures_dir: figures
+
+download:
+  url: https://files.grouplens.org/datasets/movielens/ml-100k.zip
+  archive_name: ml-100k.zip
+  md5: 0e33842e24a9c977be4e0107933c0723
+  extract_subdir: ml-100k
+
+# Per-user temporal split.  A random row split leaks future interactions into training and
+# inflates every metric; see results/split_ablation.csv for how much.
+split:
+  train_frac: 0.7
+  val_frac: 0.1
+  test_frac: 0.2
+  min_train_ratings: 5
+
+evaluation:
+  k_values: [5, 10, 20]
+  relevance_threshold: 4.0
+  rating_min: 1.0
+  rating_max: 5.0
+
+features:
+  document_parts: [genres, title_tokens, decade]
+  min_df: 2
+  sublinear_tf: true
+
+models:
+  global_mean: {}
+  user_mean:
+    shrinkage: 10.0
+  item_mean:
+    shrinkage: 10.0
+  most_popular: {}
+  content:
+    calibration_scale: 1.0
+  item_knn:
+    neighbourhood_size: 40
+    shrinkage: 50.0
+    centering: item
+  mf:
+    n_factors: 32
+    learning_rate: 0.01
+    regularisation: 0.05
+    n_epochs: 60
+    patience: 5
+    init_scale: 0.1
+  hybrid:
+    curve_intercept: 0.0
+    curve_slope: 0.0

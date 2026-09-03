@@ -1,0 +1,21 @@
+# Datasets are downloaded, never committed.
+/data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Environments and tooling
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# OS noise
+.DS_Store
+Thumbs.db
