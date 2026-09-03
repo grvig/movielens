@@ -13,7 +13,7 @@ import pytest
 from src.config import load_config
 
 N_USERS = 12
-N_ITEMS = 15
+N_ITEMS = 30
 MIN_RATINGS = 8
 MAX_RATINGS = 12
 BASE_TIMESTAMP = 880000000
