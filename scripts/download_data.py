@@ -20,6 +20,14 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+# Running a file inside scripts/ puts scripts/ on the import path, not the repository
+# root, so "import src" would fail on a fresh clone unless the package had been installed
+# first. Putting the root on the path here means the documented commands work straight
+# after a git clone, with pip install -e . left as an optional convenience.
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
 from src.config import load_config
 
 CHUNK_SIZE = 1024 * 256

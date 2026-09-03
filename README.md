@@ -16,10 +16,12 @@ The claim the repository exists to support:
 
 ```bash
 pip install -r requirements.txt
-pip install -e .
 python scripts/download_data.py
 python scripts/preprocess.py
 ```
+
+That is the whole setup. Everything runs from a bare clone at the repository root — no
+`pip install -e .` needed, and no `PYTHONPATH` to set.
 
 `download_data.py` fetches `ml-100k.zip` from GroupLens, verifies its MD5 against
 `configs/default.yaml` and extracts to `data/raw/`. `preprocess.py` writes the processed
@@ -101,6 +103,12 @@ figures/                 committed figures
 
 ```bash
 python -m pytest
+```
+
+Run experiments and tests from the repository root, so that `src` resolves:
+
+```bash
+python -m src.experiments.run_main
 ```
 
 Tests run locally; there is no CI. The suite uses a synthetic fixture rather than the real
