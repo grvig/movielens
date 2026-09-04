@@ -23,8 +23,14 @@ python scripts/preprocess.py
 That is the whole setup. Everything runs from a bare clone at the repository root — no
 `pip install -e .` needed, and no `PYTHONPATH` to set.
 
-`download_data.py` fetches `ml-100k.zip` from GroupLens, verifies its MD5 against
-`configs/default.yaml` and extracts to `data/raw/`. `preprocess.py` writes the processed
+`download_data.py` fetches `ml-100k.zip` from GroupLens, checks it against both GroupLens's
+published `.md5` and the one pinned in `configs/default.yaml`, and extracts to `data/raw/`.
+
+> **GroupLens's certificate expired on 28 Aug 2026.** Until they renew, add
+> `--allow-expired-cert`. That does *not* disable verification — it pins the certificate,
+> requiring the server to present exactly the one whose SHA-256 is in the config and
+> ignoring only the expiry date. It trusts no certificate authority, so it is stricter than
+> the default path. Delete the flag and the pin once they renew. `preprocess.py` writes the processed
 tables and the train/validation/test split into `data/processed/`, prints a data card, and
 asserts that the split has no temporal leakage.
 
@@ -93,7 +99,7 @@ build each one.
 | `item_mean` | predicted rating | Shrunk item bias |
 | `most_popular` | training rating count | The **ranking** floor, and the hard one to beat. RMSE equals `global_mean` by construction |
 | `content` | cosine to user profile | Mean-centred TF-IDF profile; cosine calibrated onto the rating scale on validation |
-| `item_knn` | predicted rating | Mean-centred cosine with significance shrinkage |
+| `item_knn` | predicted rating | Mean-centred cosine with significance shrinkage; base term shrunk like `item_mean` |
 | `mf` | predicted rating | Biases + L2, SGD, early stopping on validation |
 
 Two behaviours that read as bugs and are not:
@@ -116,21 +122,55 @@ and asserts the test-split numbers of the models that ignore validation do not m
 ## Results
 
 <!-- RESULTS_TABLE_START -->
-_Not yet populated._ The pipeline runs end to end and is tested against a synthetic
-fixture, but no numbers here are real yet: the dataset has not been downloaded, because
-`files.grouplens.org` has been serving an expired TLS certificate since 28 Aug 2026.
-Certificate verification was deliberately **not** disabled — the pinned MD5 has never been
-confirmed against GroupLens, so trusting an unauthenticated download because it matches an
-unverified hash would not be verification.
+| Model | RMSE | MAE | P@10 | R@10 | Cov@10 | PopPct@10 | Gini@10 |
+|---|---|---|---|---|---|---|---|
+| Global mean | 1.2149 | 1.0065 | 0.0233 | 0.0236 | 0.0190 | 0.8343 | 0.9923 |
+| User mean | 1.1570 | 0.9271 | 0.0233 | 0.0236 | 0.0190 | 0.8343 | 0.9923 |
+| Item mean | 1.0913 | 0.8774 | 0.0434 | 0.0401 | 0.0324 | 0.9135 | 0.9912 |
+| Most popular | 1.2149 | 1.0065 | 0.0657 | 0.0682 | 0.0419 | 0.9935 | 0.9870 |
+| Content-based | 1.1422 | 0.9093 | 0.0201 | 0.0193 | 0.4552 | 0.6168 | 0.8359 |
+| Item-kNN | 1.0171 | 0.7993 | 0.0362 | 0.0262 | 0.3410 | 0.6709 | 0.9115 |
+| Matrix factorisation | 0.9962 | 0.7874 | 0.0422 | 0.0378 | 0.1727 | 0.8219 | 0.9633 |
 
-Once the download succeeds, `python -m src.experiments.run_main` populates this block.
+Test split: 20000 held-out ratings; ranking metrics averaged over the 906 users with at least one relevant held-out item. Seed 20260903, run 20260904T065729.
+
+Lower is better for RMSE, MAE and the two popularity columns. Higher is better for precision, recall and coverage.
 <!-- RESULTS_TABLE_END -->
+
+Regenerate with `python -m src.experiments.make_readme_table` after a run. The CSV is the
+source of truth; this table is a view of it. These are **untuned** numbers — the sweeps
+have not run yet.
 
 Metrics reported side by side, per model:
 
 - **Accuracy** — RMSE, MAE on held-out ratings.
 - **Ranking** — precision@k, recall@k at k = 5, 10, 20.
 - **Catalogue** — coverage@k, mean recommended popularity, popularity percentile, Gini.
+
+### What the first run shows
+
+**The accuracy/catalogue tension is real and large.** Matrix factorisation wins RMSE
+(0.9962) while showing 17% of the catalogue at a popularity percentile of 0.82.
+Content-based is 15% worse on RMSE (1.1422) but reaches 46% of the catalogue at 0.62. They
+are not competing on the same axis, which is the backbone of the results section.
+
+**No personalised model beats the popularity baseline on precision@10.** Most-popular
+scores 0.0657; the best personalised model manages 0.0422. It does that by showing everyone
+essentially the same 4% of the catalogue at the 99th popularity percentile. This is the
+honest headline, and the argument for reporting catalogue metrics at all — on precision
+alone the correct conclusion would be "don't personalise".
+
+**Item-kNN is the balanced one.** Second-best RMSE, twice MF's coverage, a markedly lower
+popularity percentile. Worth saying plainly, because the narrative that MF simply wins does
+not survive looking at the other columns.
+
+Two artifacts to be aware of before quoting anything:
+
+- `global_mean` scores a non-zero precision@10 of 0.0233 despite having no ranking signal
+  at all. Its tie-break is ascending item id, and low item ids in ML-100K are the early,
+  popular films. That number is an artifact of the dataset's id ordering, not a signal.
+- `most_popular` and `global_mean` have identical RMSE by construction — most-popular
+  predicts the global mean and only its ranking differs.
 
 ## Layout
 
