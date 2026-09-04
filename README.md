@@ -36,6 +36,16 @@ Nothing under `data/` is committed. A fresh clone reproduces it from those two c
 python -m src.experiments.run_main
 ```
 
+Fits all seven models on train, evaluates on test, writes `results/main_results.csv` and
+prints the comparison table. Add `--cache` to reuse stored matrix factorisation fits.
+
+```bash
+python -m src.experiments.run_split_ablation
+```
+
+Runs the identical pipeline under the temporal split and under a naive random row split,
+and reports the gap. This is the experiment that justifies the protocol with a number.
+
 Experiments write CSVs into `results/`. Plotting scripts read those CSVs and write into
 `figures/`. Training code never plots — otherwise every axis-label change in the report
 means re-running a matrix factorisation sweep.
@@ -70,11 +80,50 @@ model.recommend(user_id, k)                 # top-k item ids, excluding training
 `rank_scores()` is overridable for models whose ranking signal is not a rating — popularity
 counts, content cosine similarity — so the accuracy and ranking families stay independent.
 
+Models differ in what they need at construction time, and that is the only place they are
+allowed to differ. `src/experiments/registry.py` is the single place that knows how to
+build each one.
+
+## The models
+
+| Model | Ranking signal | Notes |
+|---|---|---|
+| `global_mean` | none (tie-break only) | Rating-prediction floor. Precision near zero is correct, not a bug |
+| `user_mean` | none (tie-break only) | Shrunk user bias, β = 10 |
+| `item_mean` | predicted rating | Shrunk item bias |
+| `most_popular` | training rating count | The **ranking** floor, and the hard one to beat. RMSE equals `global_mean` by construction |
+| `content` | cosine to user profile | Mean-centred TF-IDF profile; cosine calibrated onto the rating scale on validation |
+| `item_knn` | predicted rating | Mean-centred cosine with significance shrinkage |
+| `mf` | predicted rating | Biases + L2, SGD, early stopping on validation |
+
+Two behaviours that read as bugs and are not:
+
+**Shrinkage does not pull kNN predictions towards the item mean.** The weighted average
+divides by the sum of absolute similarities, so scaling every similarity by the same factor
+cancels exactly. Shrinkage only bites when co-occurrence counts differ between neighbours,
+or when it changes which items reach the top-k neighbourhood.
+
+**`global_mean` and `user_mean` produce near-zero precision@k.** They have no per-item
+signal, so their ranking is arbitrary up to the item-id tie-break. They are the rating
+floor; `most_popular` is the ranking floor.
+
+## Where validation is used
+
+Validation reaches exactly two models — `content` for its cosine calibration, `mf` for
+early stopping — and never reaches evaluation. A test overwrites every validation rating
+and asserts the test-split numbers of the models that ignore validation do not move.
+
 ## Results
 
 <!-- RESULTS_TABLE_START -->
-_Not yet populated. Generated from `results/main_results.csv` by
-`python -m src.experiments.make_readme_table` once the main experiment runner lands._
+_Not yet populated._ The pipeline runs end to end and is tested against a synthetic
+fixture, but no numbers here are real yet: the dataset has not been downloaded, because
+`files.grouplens.org` has been serving an expired TLS certificate since 28 Aug 2026.
+Certificate verification was deliberately **not** disabled — the pinned MD5 has never been
+confirmed against GroupLens, so trusting an unauthenticated download because it matches an
+unverified hash would not be verification.
+
+Once the download succeeds, `python -m src.experiments.run_main` populates this block.
 <!-- RESULTS_TABLE_END -->
 
 Metrics reported side by side, per model:
@@ -90,9 +139,11 @@ configs/default.yaml     seed, paths, split ratios, protocol, hyperparameters
 scripts/                 download_data.py, preprocess.py
 src/config.py            config loading and global seeding
 src/data/                loaders, item features, temporal splitting
+src/data/matrix.py       sparse rating matrix shared by both collaborative models
 src/models/              base.py is the contract; one module per model family
+src/models/similarity.py centring, cosine and shrinkage for item-kNN
 src/evaluation/          metrics.py (accuracy), ranking.py, harness.py
-src/experiments/         scripts that run a config and dump CSVs
+src/experiments/         registry.py builds models; run_*.py run a config and dump CSVs
 src/plots/               scripts that read CSVs and write figures
 tests/                   pytest, run locally; no CI
 results/                 committed CSVs, the report's source of truth
@@ -117,8 +168,12 @@ dataset, so it runs in under a second and works on a clone with no `data/` direc
 `tests/test_splitting.py` is the important one — it asserts that no user's training ratings
 postdate their held-out ratings. If it fails, every number in `results/` is wrong.
 
-`tests/test_models.py` is parameterised over every model class. A model that needs an
-exception there is a model that would quietly invalidate the comparison.
+`tests/test_models.py` is parameterised over every model family — all seven pass the same
+contract with no exceptions. A model that needs an exception there is a model that would
+quietly invalidate the comparison.
+
+`tests/test_run_main.py` drives the whole pipeline against a miniature processed directory
+built from the fixture, so the runner wiring is verified without the real dataset.
 
 ## Dataset notes
 
