@@ -57,6 +57,9 @@ models:
     neighbourhood_size: 40
     shrinkage: 50.0
     centering: item
+    # Regularises the base term the same way item_mean does. Without it, items with a
+    # single 5.0 rating dominate every top-k list.
+    mean_shrinkage: 10.0
   mf:
     n_factors: 32
     learning_rate: 0.01

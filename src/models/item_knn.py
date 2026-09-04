@@ -44,7 +44,8 @@ class ItemKNN(Recommender):
 
     name = "item_knn"
 
-    def __init__(self, config, neighbourhood_size=None, shrinkage=None, centering=None):
+    def __init__(self, config, neighbourhood_size=None, shrinkage=None, centering=None,
+                 mean_shrinkage=None):
         super().__init__(config)
         params = config.model_params("item_knn")
         if neighbourhood_size is None:
@@ -53,9 +54,12 @@ class ItemKNN(Recommender):
             shrinkage = params["shrinkage"]
         if centering is None:
             centering = params["centering"]
+        if mean_shrinkage is None:
+            mean_shrinkage = params["mean_shrinkage"]
         self.neighbourhood_size = int(neighbourhood_size)
         self.shrinkage = float(shrinkage)
         self.centering = str(centering)
+        self.mean_shrinkage = float(mean_shrinkage)
         self.rating_matrix = None
         self.similarity = None
         self.centre_means = None
@@ -69,7 +73,7 @@ class ItemKNN(Recommender):
         self.similarity = cosine_similarity(centred)
         counts = cooccurrence_counts(self.rating_matrix.matrix)
         self.similarity = apply_shrinkage(self.similarity, counts, self.shrinkage)
-        self.item_means = item_mean_vector(self.rating_matrix)
+        self.item_means = item_mean_vector(self.rating_matrix, self.mean_shrinkage)
         return self
 
     def deviations_for(self, user_id):
@@ -135,13 +139,29 @@ def weighted_deviation(neighbours, similarities, deviation_by_position):
     return numerator / denominator
 
 
-def item_mean_vector(rating_matrix):
-    """Mean observed rating per item column, falling back to the overall mean."""
+def item_mean_vector(rating_matrix, shrinkage):
+    """Per-item mean rating, shrunk towards the overall mean.
+
+        mean(i) = overall + sum(rating - overall) / (count + shrinkage)
+
+    The shrinkage is not optional dressing. This is the base term the prediction is built
+    on, and MovieLens 100K has twelve items whose entire training history is one or two
+    ratings that happen to be 5.0. With a raw mean those items score a perfect 5 and take
+    over every top-k list, which is what happened on the first full run: eight of the ten
+    recommendations for user 1 were items with a single rating.
+
+    The ItemMean baseline already shrinks with the same parameter, so leaving it out here
+    also made the two models incomparable, in a project whose premise is that every model
+    gets identical treatment.
+
+    Note that this deliberately does not change the deviation term. The similarity is
+    centred on raw means, which is the standard arrangement: the base term is an estimate
+    of an item's rating level and needs regularising, while the centring is about the
+    relative structure the similarity is measured over.
+    """
     as_csc = rating_matrix.matrix.tocsc()
     sums = np.asarray(as_csc.sum(axis=0)).ravel()
     counts = np.diff(as_csc.indptr).astype(np.float64)
     overall = float(sums.sum() / max(1.0, counts.sum()))
-    means = np.full(rating_matrix.n_items, overall, dtype=np.float64)
-    nonzero = counts > 0
-    means[nonzero] = sums[nonzero] / counts[nonzero]
-    return means
+    deviations = sums - overall * counts
+    return overall + deviations / (counts + shrinkage)

@@ -158,6 +158,40 @@ def test_weighted_deviation_with_no_neighbours_is_zero():
     assert weighted_deviation(np.array([]), np.array([]), {}) == 0.0
 
 
+def test_a_single_five_star_rating_does_not_win_the_ranking(config):
+    """The failure found on the first full run against the real dataset.
+
+    An item rated once at 5.0 has a raw mean of exactly 5.0 and outranks a genuinely
+    well-liked item with hundreds of ratings. Eight of the top ten for user 1 were items
+    with a single rating. The base term has to be shrunk, exactly as ItemMean shrinks.
+    """
+    rows = []
+    for user_id in range(1, 31):
+        # A genuinely well-liked item, and a mass of poorly-rated ones so that the overall
+        # mean sits well below it. Without that contrast, shrinking towards the overall
+        # mean has nothing to pull against and the test proves nothing.
+        rows.append((user_id, 1, 4.5, 100))
+        rows.append((user_id, 4, 2.0, 101))
+    rows.append((1, 2, 5.0, 102))
+    rows.append((31, 4, 2.0, 103))
+    ratings = pd.DataFrame(rows, columns=["user_id", "item_id", "rating", "timestamp"])
+
+    unshrunk = ItemKNN(config, mean_shrinkage=0.0).fit(ratings)
+    assert unshrunk.recommend(31, 1)[0] == 2
+
+    shrunk = ItemKNN(config, mean_shrinkage=10.0).fit(ratings)
+    assert shrunk.recommend(31, 1)[0] == 1
+
+
+def test_mean_shrinkage_matches_the_item_mean_baseline(config, agreeing_ratings):
+    """Both models estimate an item's level, so both must regularise it the same way."""
+    from src.models.baselines import ItemMean
+
+    knn = ItemKNN(config).fit(agreeing_ratings)
+    baseline = ItemMean(config).fit(agreeing_ratings)
+    assert knn.mean_shrinkage == pytest.approx(baseline.shrinkage)
+
+
 def test_knn_runs_on_the_shared_fixture(config, synthetic_ratings):
     model = ItemKNN(config).fit(synthetic_ratings)
     predictions = model.predict(1, np.array([1, 2, 3]))
