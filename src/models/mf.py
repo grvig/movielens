@@ -18,10 +18,14 @@ than a DataFrame. Iterating rows of a DataFrame for 70,000 ratings times 60 epoc
 one part of this project that can turn a sweep into an afternoon.
 """
 
+import hashlib
+
 import numpy as np
 
 from src.data.matrix import build_rating_matrix
 from src.models.base import Recommender
+
+IMPROVEMENT_TOLERANCE = 1e-5
 
 
 class MatrixFactorization(Recommender):
@@ -30,9 +34,17 @@ class MatrixFactorization(Recommender):
     name = "mf"
 
     def __init__(self, config, n_factors=None, learning_rate=None, regularisation=None,
-                 n_epochs=None):
+                 n_epochs=None, validation=None, patience=None, cache=False):
         super().__init__(config)
         params = config.model_params("mf")
+        if patience is None:
+            patience = params["patience"]
+        self.patience = int(patience)
+        self.validation = validation
+        self.cache = cache
+        self.val_history = []
+        self.best_epoch = None
+        self.loaded_from_cache = False
         if n_factors is None:
             n_factors = params["n_factors"]
         if learning_rate is None:
@@ -57,6 +69,10 @@ class MatrixFactorization(Recommender):
         self.record_training_data(train_ratings)
         self.rating_matrix = build_rating_matrix(train_ratings)
         users, items, ratings = self.training_arrays(train_ratings)
+
+        if self.cache and self.load_from_cache(users, items, ratings):
+            return self
+
         # One generator for the whole fit, taken from the shared seed. Initialisation and
         # shuffling draw from the same stream, so a refit reproduces bit for bit.
         rng = self.config.fresh_rng()
@@ -64,12 +80,87 @@ class MatrixFactorization(Recommender):
             self.rating_matrix.n_users, self.rating_matrix.n_items, rng
         )
         self.train_history = []
+        self.val_history = []
+        validation_arrays = self.validation_arrays()
+
+        best_rmse = float("inf")
+        best_parameters = None
+        epochs_without_improvement = 0
 
         for epoch in range(self.n_epochs):
             order = rng.permutation(len(ratings))
             self.run_epoch(users, items, ratings, order)
             self.train_history.append(self.training_rmse(users, items, ratings))
+
+            if validation_arrays is None:
+                continue
+
+            validation_rmse = self.training_rmse(*validation_arrays)
+            self.val_history.append(validation_rmse)
+            if validation_rmse < best_rmse - IMPROVEMENT_TOLERANCE:
+                best_rmse = validation_rmse
+                best_parameters = self.snapshot()
+                self.best_epoch = epoch
+                epochs_without_improvement = 0
+            else:
+                epochs_without_improvement = epochs_without_improvement + 1
+                if epochs_without_improvement >= self.patience:
+                    break
+
+        # Restore the best epoch rather than keeping the last one. Without this, early
+        # stopping would detect the overfitting and then hand back the overfitted model.
+        if best_parameters is not None:
+            self.restore(best_parameters)
+
+        if self.cache:
+            self.save_to_cache(users, items, ratings)
         return self
+
+    def validation_arrays(self):
+        """Validation ratings as matrix positions, dropping users and items not in train.
+
+        A validation rating for an item the model has never seen tells us nothing about
+        whether it is overfitting, so those rows are excluded rather than scored against
+        the global-mean fallback.
+        """
+        if self.validation is None or len(self.validation) == 0:
+            return None
+        users = []
+        items = []
+        values = []
+        for user_id, item_id, rating in zip(
+            self.validation["user_id"],
+            self.validation["item_id"],
+            self.validation["rating"],
+        ):
+            user_position = self.rating_matrix.user_position.get(int(user_id))
+            item_position = self.rating_matrix.item_position.get(int(item_id))
+            if user_position is None or item_position is None:
+                continue
+            users.append(user_position)
+            items.append(item_position)
+            values.append(float(rating))
+        if len(values) == 0:
+            return None
+        return (
+            np.array(users, dtype=np.int64),
+            np.array(items, dtype=np.int64),
+            np.array(values, dtype=np.float64),
+        )
+
+    def snapshot(self):
+        return (
+            self.user_bias.copy(),
+            self.item_bias.copy(),
+            self.user_factors.copy(),
+            self.item_factors.copy(),
+        )
+
+    def restore(self, parameters):
+        self.user_bias = parameters[0]
+        self.item_bias = parameters[1]
+        self.user_factors = parameters[2]
+        self.item_factors = parameters[3]
 
     def training_arrays(self, train_ratings):
         """Ratings as three aligned numpy arrays of matrix positions and values."""
@@ -123,6 +214,74 @@ class MatrixFactorization(Recommender):
             self.item_factors[item] = item_vector + learning_rate * (
                 error * previous_user - regularisation * item_vector
             )
+
+    def cache_key(self, users, items, ratings):
+        """Identify a fit by its hyperparameters, its seed and the exact training data.
+
+        The data goes into the key as a hash of the raw arrays rather than as a row count.
+        A cache keyed on shape alone would happily return a model trained on the full
+        history when asked for one trained on a truncated cold-start history, which is
+        precisely the experiment where that mistake would be hardest to notice.
+        """
+        digest = hashlib.md5()
+        digest.update(users.tobytes())
+        digest.update(items.tobytes())
+        digest.update(ratings.tobytes())
+        parts = [
+            self.name,
+            str(self.n_factors),
+            str(self.learning_rate),
+            str(self.regularisation),
+            str(self.n_epochs),
+            str(self.patience),
+            str(self.init_scale),
+            str(self.config.seed),
+            str(self.validation is not None),
+            digest.hexdigest(),
+        ]
+        return hashlib.md5("|".join(parts).encode("utf-8")).hexdigest()
+
+    def cache_path(self, users, items, ratings):
+        directory = self.config.path("fits_dir")
+        return directory / (self.name + "_" + self.cache_key(users, items, ratings) + ".npz")
+
+    def load_from_cache(self, users, items, ratings):
+        path = self.cache_path(users, items, ratings)
+        if not path.exists():
+            return False
+        stored = np.load(path, allow_pickle=False)
+        self.user_bias = stored["user_bias"]
+        self.item_bias = stored["item_bias"]
+        self.user_factors = stored["user_factors"]
+        self.item_factors = stored["item_factors"]
+        self.train_history = stored["train_history"].tolist()
+        self.val_history = stored["val_history"].tolist()
+        best_epoch = int(stored["best_epoch"])
+        if best_epoch < 0:
+            self.best_epoch = None
+        else:
+            self.best_epoch = best_epoch
+        self.loaded_from_cache = True
+        return True
+
+    def save_to_cache(self, users, items, ratings):
+        path = self.cache_path(users, items, ratings)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if self.best_epoch is None:
+            best_epoch = -1
+        else:
+            best_epoch = self.best_epoch
+        np.savez(
+            path,
+            user_bias=self.user_bias,
+            item_bias=self.item_bias,
+            user_factors=self.user_factors,
+            item_factors=self.item_factors,
+            train_history=np.array(self.train_history, dtype=np.float64),
+            val_history=np.array(self.val_history, dtype=np.float64),
+            best_epoch=np.array(best_epoch, dtype=np.int64),
+        )
+        return path
 
     def raw_predictions(self, users, items):
         """Unclipped predictions for aligned position arrays."""

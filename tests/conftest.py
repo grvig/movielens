@@ -19,8 +19,14 @@ MAX_RATINGS = 12
 BASE_TIMESTAMP = 880000000
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def config():
+    """Function scoped on purpose.
+
+    Several tests tweak a config value - a lower min_df, a temporary fits directory - and a
+    session-scoped config would carry those edits into every later test in the run. Loading
+    the YAML per test costs nothing and keeps each test honest about what it configured.
+    """
     return load_config()
 
 

@@ -21,7 +21,7 @@ from src.models.baselines import UserMean
 MODEL_CLASSES = [GlobalMean, UserMean, ItemMean, MostPopular]
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def split(config, synthetic_ratings):
     return temporal_split(synthetic_ratings, config)
 
