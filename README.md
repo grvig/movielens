@@ -164,6 +164,29 @@ alone the correct conclusion would be "don't personalise".
 popularity percentile. Worth saying plainly, because the narrative that MF simply wins does
 not survive looking at the other columns.
 
+### Why not a random split
+
+`results/split_ablation.csv` runs the identical pipeline under both splits. Every model
+looks better under a random row split — RMSE by 5.5–10.3%, precision@10 by 27–87%.
+
+The distortion is not uniform, and it lands on the number the report leads with:
+
+| Metric | Temporal winner | Random winner |
+|---|---|---|
+| RMSE | Matrix factorisation (0.9962) | **Item-kNN** (0.9289) |
+
+Under the temporal split MF beats item-kNN by 0.0209 RMSE. Under a random split the order
+reverses and item-kNN wins by 0.0035. **The choice of split changes which model is reported
+as the most accurate.** The random-split margin is small, so calling that a firm reversal
+needs the bootstrap intervals rather than point estimates — but it is more than enough to
+justify the protocol.
+
+One expectation this experiment overturned: the inflation is *larger for the weaker
+models*, not the stronger ones. Content-based gains most on RMSE (−10.3%) and MF least
+(−6.4%); most-popular gains most on precision (+87%) and content least (+27%). In hindsight
+that is the more sensible prediction — MF already extracts most of the available signal, so
+leaked information has less headroom to help it.
+
 Two artifacts to be aware of before quoting anything:
 
 - `global_mean` scores a non-zero precision@10 of 0.0233 despite having no ranking signal

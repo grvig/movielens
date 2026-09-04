@@ -11,10 +11,26 @@ someone rate a sequel before predicting they liked the original, and every metri
 for a reason that has nothing to do with the model being better. The gap between the two
 columns is the size of that illusion on this dataset.
 
-This is worth its own experiment rather than a paragraph, for two reasons. It justifies the
-protocol with a number instead of an appeal to the literature, and the gap is usually
-larger for the stronger models, which means a random split does not merely inflate results
-uniformly - it distorts the ranking between the models being compared.
+This is worth its own experiment rather than a paragraph, because it justifies the protocol
+with a number instead of an appeal to the literature.
+
+What the run actually showed on MovieLens 100K, which is not what was expected here before
+it ran:
+
+*   Every model looks better under the random split. RMSE improves by 5.5 to 10.3 percent
+    and precision@10 by 27 to 87 percent.
+*   The gain is **larger for the weaker models, not the stronger ones**. Content-based
+    gains most on RMSE (-10.3%) and matrix factorisation least (-6.4%); most-popular gains
+    most on precision (+87%) and content least (+27%). In hindsight that is the more
+    sensible expectation: matrix factorisation already extracts most of the available
+    signal, so leaked information has less headroom to help it.
+*   The distortion is still real, and it lands on the number the report leads with. Under
+    the temporal split matrix factorisation wins RMSE (0.9962 against item-kNN's 1.0171).
+    Under the random split the two swap, and item-kNN wins (0.9289 against 0.9324). The
+    choice of split changes which model is reported as the most accurate.
+
+The random-split margin between those two is small, so calling it a firm reversal needs the
+bootstrap confidence intervals rather than the point estimates alone.
 """
 
 import argparse
