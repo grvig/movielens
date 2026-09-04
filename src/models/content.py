@@ -38,10 +38,13 @@ class ContentBased(Recommender):
 
     name = "content"
 
-    def __init__(self, config, items):
+    def __init__(self, config, items, validation=None):
         super().__init__(config)
         params = config.model_params("content")
-        self.calibration_scale = float(params["calibration_scale"])
+        self.default_scale = float(params["calibration_scale"])
+        self.calibration_scale = self.default_scale
+        self.calibration_fitted = False
+        self.validation = validation
         self.items = items
         self.feature_matrix = None
         self.item_index = {}
@@ -55,7 +58,38 @@ class ContentBased(Recommender):
         self.item_index = build_item_index(feature_item_ids)
         self.user_mean = user_means(train_ratings)
         self.build_profiles(train_ratings)
+        if self.validation is not None and len(self.validation) > 0:
+            self.calibration_scale = self.fit_calibration(self.validation)
+            self.calibration_fitted = True
         return self
+
+    def fit_calibration(self, validation):
+        """Least-squares fit of the cosine-to-rating scale on held-out ratings.
+
+        The model predicts ``rating = user_mean + alpha * cosine``, so with the user mean
+        subtracted this is a one-parameter regression through the origin::
+
+            alpha = sum(centred_rating * cosine) / sum(cosine ** 2)
+
+        Fitted on validation and never on test. Fitting it on training data would let the
+        scale absorb the profiles' own overfitting, and fitting it on test would be
+        straightforward leakage.
+        """
+        numerator = 0.0
+        denominator = 0.0
+        for user_id, group in validation.groupby("user_id"):
+            if self.profile_for(user_id) is None:
+                continue
+            items = group["item_id"].to_numpy(dtype=np.int64)
+            similarities = self.rank_scores(user_id, items)
+            centre = self.user_mean.get(int(user_id), self.global_mean)
+            centred = group["rating"].to_numpy(dtype=np.float64) - centre
+            numerator = numerator + float(np.sum(centred * similarities))
+            denominator = denominator + float(np.sum(similarities * similarities))
+        if denominator < EPSILON:
+            return self.default_scale
+        scale = numerator / denominator
+        return clamp_scale(scale, self.rating_max - self.rating_min)
 
     def build_profiles(self, train_ratings):
         """One unit-length profile vector per user, stored as a dense matrix."""
@@ -128,13 +162,28 @@ class ContentBased(Recommender):
         """Map cosine similarity onto the rating scale.
 
         A cosine is not a rating, so it has to be shifted onto the user's own scale and
-        stretched by some factor. The factor is a fixed config value here; the next commit
-        fits it on the validation split instead, which is the honest version.
+        stretched by some factor. That factor is fitted on validation when a validation
+        split is supplied to the constructor, and otherwise falls back to the config value.
         """
         self.check_fitted()
         similarities = self.rank_scores(user_id, candidate_items)
         centre = self.user_mean.get(int(user_id), self.global_mean)
         return self.clip(centre + self.calibration_scale * similarities)
+
+
+def clamp_scale(scale, rating_range):
+    """Keep the fitted scale inside a defensible range.
+
+    A negative scale would mean the profile is anti-correlated with the ratings it was
+    built from, which is a bug rather than a finding, so it is floored at zero. The upper
+    bound stops a handful of near-zero cosines in a thin validation split from producing a
+    huge multiplier that the clip to [1, 5] then hides.
+    """
+    if scale < 0.0:
+        return 0.0
+    if scale > rating_range:
+        return rating_range
+    return scale
 
 
 def user_means(train_ratings):
