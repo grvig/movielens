@@ -14,9 +14,16 @@ paths:
 
 download:
   url: https://files.grouplens.org/datasets/movielens/ml-100k.zip
+  md5_url: https://files.grouplens.org/datasets/movielens/ml-100k.zip.md5
   archive_name: ml-100k.zip
   md5: 0e33842e24a9c977be4e0107933c0723
   extract_subdir: ml-100k
+  # SHA-256 of the certificate files.grouplens.org served on 2026-09-04, recorded because
+  # that certificate expired on 2026-08-28 and had not been renewed. Used only by
+  # --allow-expired-cert, which requires this exact certificate and ignores the expiry
+  # date, rather than disabling verification and accepting anything at all.
+  # Delete this and drop the flag once GroupLens renews.
+  certificate_sha256: "964d10cca0e47c190e5fd2e9159330750767b584feeacac67cbe925a91447555"
 
 # Per-user temporal split.  A random row split leaks future interactions into training and
 # inflates every metric; see results/split_ablation.csv for how much.
