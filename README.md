@@ -5,12 +5,41 @@ not a recommender; it is the comparison. Four approaches are pushed through an i
 split, an identical candidate set and an identical metric suite, so we can say precisely
 where each one wins and what it pays for the win.
 
-The claim the repository exists to support:
+Two of the four are registered twice, tuned once for accuracy and once for ranking, because
+the two criteria select different hyperparameters for the same algorithm. Nine models in
+total.
 
-> Under one protocol, matrix factorisation wins on rating accuracy while recommending a
-> narrow, popular slice of the catalogue. Content-based scoring loses on accuracy but
-> spreads across the catalogue and survives cold users. A hybrid weighted by profile
-> density beats both around the crossover.
+The claim the repository exists to support, as the results now stand:
+
+> Under one protocol, **no personalised model beats a popularity baseline on precision@10**
+> — and the reason is that precision@10 largely measures popularity rather than accuracy
+> (r = 0.91 against popularity bias, 0.49 against RMSE). Tuning an algorithm on ranking
+> instead of accuracy moves it *towards* the popularity baseline rather than past it.
+> Matrix factorisation wins on rating accuracy while concentrating on a narrow slice of the
+> catalogue; content-based scoring is 15% worse on RMSE and spreads three times wider.
+
+Two parts of this are still predictions rather than findings, and are labelled as such
+until the experiments run: that content-based scoring survives cold users better than
+collaborative filtering, and that a hybrid weighted by profile density beats both at the
+crossover.
+
+<details>
+<summary>What this replaced, and why</summary>
+
+The original thesis read: *"matrix factorisation wins on rating accuracy while recommending
+a narrow, popular slice of the catalogue."* The first half held. The second did not.
+
+Accuracy-tuned matrix factorisation has the **lowest** popularity percentile of any
+personalised model here (0.5816, against 0.6168 for content-based and 0.6708 for item-kNN).
+It is narrow — 15% coverage, Gini 0.97 — but narrow and *obscure*, not narrow and popular.
+The narrow-and-popular description belongs to the ranking-tuned variant (0.8976), which is
+a different set of hyperparameters for the same algorithm.
+
+Coverage and popularity bias are separate axes, and this dataset separates them: a model
+can concentrate hard on a small set of items without those being the popular ones. Keeping
+the original wording would have meant reporting a result the numbers contradict.
+
+</details>
 
 ## Quick start
 
