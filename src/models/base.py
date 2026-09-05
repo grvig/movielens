@@ -31,7 +31,12 @@ class Recommender(ABC):
 
     name = "recommender"
 
-    def __init__(self, config):
+    def __init__(self, config, name=None):
+        # A model class can back more than one registered model when the same algorithm is
+        # tuned two ways. The name is what the results table keys on, so it has to differ
+        # even though the class does not.
+        if name is not None:
+            self.name = name
         self.config = config
         evaluation = config.section("evaluation")
         self.rating_min = float(evaluation["rating_min"])

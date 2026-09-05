@@ -45,8 +45,8 @@ class ItemKNN(Recommender):
     name = "item_knn"
 
     def __init__(self, config, neighbourhood_size=None, shrinkage=None, centering=None,
-                 mean_shrinkage=None):
-        super().__init__(config)
+                 mean_shrinkage=None, name=None):
+        super().__init__(config, name=name)
         params = config.model_params("item_knn")
         if neighbourhood_size is None:
             neighbourhood_size = params["neighbourhood_size"]

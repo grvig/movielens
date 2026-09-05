@@ -9,6 +9,13 @@ Models differ in what they need at construction time - the content model takes t
 table, matrix factorisation takes a validation split for early stopping - so each entry is
 a builder function with a uniform signature. Everything after construction is the shared
 interface.
+
+Two models appear twice under different names. Both sweeps in results/tuning_*.csv found
+that validation RMSE and validation precision@10 pick different configurations of the same
+algorithm, and pick them strongly: item-kNN loses 46 percent of its precision when selected
+on RMSE, and even changes centring convention. Registering the accuracy-tuned and
+ranking-tuned settings as separate models puts that in the results table as a row rather
+than leaving it in the report as an assertion.
 """
 
 from src.models.baselines import GlobalMean
@@ -26,7 +33,9 @@ MODEL_ORDER = [
     "most_popular",
     "content",
     "item_knn",
+    "item_knn_ranking",
     "mf",
+    "mf_ranking",
 ]
 
 
@@ -44,8 +53,23 @@ def build_model(name, config, items, validation=None, cache=False):
         return ContentBased(config, items, validation=validation)
     if name == "item_knn":
         return ItemKNN(config)
+    if name == "item_knn_ranking":
+        return ItemKNN(config, name=name, **config.model_params(name))
     if name == "mf":
         return MatrixFactorization(config, validation=validation, cache=cache)
+    if name == "mf_ranking":
+        params = config.model_params(name)
+        return MatrixFactorization(
+            config,
+            name=name,
+            n_factors=params["n_factors"],
+            learning_rate=params["learning_rate"],
+            regularisation=params["regularisation"],
+            n_epochs=params["n_epochs"],
+            patience=params["patience"],
+            validation=validation,
+            cache=cache,
+        )
     raise ValueError("unknown model: " + name)
 
 

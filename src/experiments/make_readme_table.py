@@ -35,8 +35,10 @@ MODEL_LABELS = {
     "item_mean": "Item mean",
     "most_popular": "Most popular",
     "content": "Content-based",
-    "item_knn": "Item-kNN",
-    "mf": "Matrix factorisation",
+    "item_knn": "Item-kNN (RMSE-tuned)",
+    "item_knn_ranking": "Item-kNN (ranking-tuned)",
+    "mf": "Matrix factorisation (RMSE-tuned)",
+    "mf_ranking": "Matrix factorisation (ranking-tuned)",
 }
 
 

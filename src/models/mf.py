@@ -34,8 +34,9 @@ class MatrixFactorization(Recommender):
     name = "mf"
 
     def __init__(self, config, n_factors=None, learning_rate=None, regularisation=None,
-                 n_epochs=None, validation=None, patience=None, cache=False):
-        super().__init__(config)
+                 n_epochs=None, validation=None, patience=None, cache=False,
+                 name=None):
+        super().__init__(config, name=name)
         params = config.model_params("mf")
         if patience is None:
             patience = params["patience"]

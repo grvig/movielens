@@ -31,7 +31,13 @@ MODEL_FACTORIES = {
     "most_popular": lambda config, items: MostPopular(config),
     "content": lambda config, items: ContentBased(config, items),
     "item_knn": lambda config, items: ItemKNN(config),
+    "item_knn_ranking": lambda config, items: ItemKNN(
+        config, name="item_knn_ranking", **config.model_params("item_knn_ranking")
+    ),
     "mf": lambda config, items: MatrixFactorization(config, n_epochs=5),
+    "mf_ranking": lambda config, items: MatrixFactorization(
+        config, name="mf_ranking", n_epochs=5
+    ),
 }
 
 
@@ -177,8 +183,8 @@ def test_shrinkage_pulls_sparse_biases_towards_zero(config, synthetic_ratings):
 
 def test_every_model_family_is_covered():
     """A new model family that is not registered here is not actually being checked."""
-    assert len(MODEL_FACTORIES) == 7
+    assert len(MODEL_FACTORIES) == 9
     assert set(MODEL_FACTORIES.keys()) == {
-        "global_mean", "user_mean", "item_mean", "most_popular",
-        "content", "item_knn", "mf",
+        "global_mean", "user_mean", "item_mean", "most_popular", "content",
+        "item_knn", "item_knn_ranking", "mf", "mf_ranking",
     }
