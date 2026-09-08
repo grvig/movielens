@@ -137,3 +137,51 @@ def load_splits(processed_dir):
             )
         frames[name] = pd.read_parquet(path)
     return frames["train"], frames["val"], frames["test"]
+
+
+def select_cold_users(train, n_users, rng, min_history=1):
+    """Choose the users whose history the cold-start experiment will truncate."""
+    counts = train.groupby("user_id").size()
+    eligible = np.sort(counts[counts >= min_history].index.to_numpy())
+    if len(eligible) <= n_users:
+        return eligible
+    chosen = rng.choice(eligible, size=n_users, replace=False)
+    return np.sort(chosen)
+
+
+def truncate_user_histories(train, user_ids, max_ratings):
+    """Keep only each named user's most recent ``max_ratings`` training ratings.
+
+    Two decisions here shape what the cold-start experiment actually measures.
+
+    **Only the named users are truncated.** Truncating everybody would starve the whole
+    model - the item similarities and latent factors would all degrade together - and the
+    figure would show how a model copes with a small dataset rather than how it copes with
+    a new user. Leaving the other 743 users intact keeps the model's view of the catalogue
+    normal and isolates the variable.
+
+    **The most recent ratings are kept, not the earliest.** The split is already temporal,
+    so a user's training ratings all precede their test ratings. Keeping the most recent n
+    minimises the time gap to the evaluation period, so the figure measures how much
+    history a model needs rather than how stale that history is.
+    """
+    cold = set(int(value) for value in user_ids)
+    ordered = train.sort_values(SORT_COLUMNS, kind="mergesort").reset_index(drop=True)
+    keep = []
+    for user_id, group in ordered.groupby("user_id"):
+        positions = group.index.to_numpy()
+        if int(user_id) not in cold:
+            keep.extend(positions.tolist())
+            continue
+        keep.extend(positions[-max_ratings:].tolist())
+    keep.sort()
+    return ordered.loc[keep].reset_index(drop=True)
+
+
+def history_lengths(train, user_ids):
+    """Training history length for each named user, zero when they have none left."""
+    counts = train.groupby("user_id").size()
+    lengths = {}
+    for user_id in user_ids:
+        lengths[int(user_id)] = int(counts.get(int(user_id), 0))
+    return lengths
