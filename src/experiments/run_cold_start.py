@@ -31,7 +31,6 @@ from src.data.splitting import truncate_user_histories
 from src.evaluation.harness import evaluate_model
 from src.evaluation.harness import make_run_id
 from src.evaluation.harness import results_frame
-from src.evaluation.harness import write_results
 from src.experiments.registry import MODEL_ORDER
 from src.experiments.registry import build_model
 from src.experiments.run_main import load_items

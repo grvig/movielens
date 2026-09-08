@@ -18,8 +18,6 @@ import argparse
 import itertools
 import time
 
-import pandas as pd
-
 from src.config import load_config
 from src.data.splitting import load_splits
 from src.evaluation.harness import evaluate_model
