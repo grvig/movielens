@@ -18,10 +18,10 @@ The claim the repository exists to support, as the results now stand:
 > Matrix factorisation wins on rating accuracy while concentrating on a narrow slice of the
 > catalogue; content-based scoring is 15% worse on RMSE and spreads three times wider.
 
-Two parts of this are still predictions rather than findings, and are labelled as such
-until the experiments run: that content-based scoring survives cold users better than
-collaborative filtering, and that a hybrid weighted by profile density beats both at the
-crossover.
+One part of this is still a prediction rather than a finding: that a hybrid weighted by
+profile density beats both at the crossover. The other prediction — that content-based
+scoring survives cold users better than collaborative filtering — has now been tested and
+**is false on this dataset**. See [Cold start](#cold-start).
 
 <details>
 <summary>What this replaced, and why</summary>
@@ -97,6 +97,14 @@ python -m src.experiments.run_bootstrap
 
 Resamples users 1000 times to put confidence intervals on every pairwise difference, so
 the report can say a gap is real rather than assert it.
+
+```bash
+python -m src.experiments.run_cold_start
+python -m src.plots.plot_cold_start
+```
+
+Truncates 200 users' histories to 1, 3, 5, 10 and 20 ratings, refits everything at each
+level and evaluates on those users alone. The most expensive script here — 45 fits.
 
 ```bash
 python -m src.experiments.recommend --user 1
@@ -273,6 +281,48 @@ including the ranking-tuned ones; matrix factorisation's RMSE win over item-kNN 
 and the selection-criterion trade-off is real in both directions — the ranking-tuned
 variants really do rank better and really are less accurate.
 
+### Cold start
+
+`results/cold_start.csv` and `figures/cold_start.pdf`. 200 users have their training
+history truncated to 1, 3, 5, 10 and 20 ratings; the other 743 are left intact so the
+model's view of the catalogue stays normal, and evaluation is restricted to the truncated
+users. Every model is refitted at every level.
+
+**The prediction was wrong.** Content-based scoring was expected to hold up best with
+almost no history, since it can score an item from its features without needing co-raters.
+It is in fact the **worst** model at one rating, on both metrics.
+
+| Test RMSE | 1 rating | 20 ratings | degradation |
+|---|---|---|---|
+| Matrix factorisation | **1.0538** | 1.0010 | +0.053 |
+| Item-kNN | 1.2536 | 1.0400 | +0.214 |
+| Content-based | **1.4761** | 1.1262 | +0.350 |
+| Global mean | 1.2074 | 1.2086 | — |
+
+At one rating, content-based is worse than predicting the global mean for everybody. Its
+precision@10 is also last of the nine (0.0147 against most-popular's 0.0406).
+
+Matrix factorisation is the most robust of the personalised models, and the reason is its
+bias terms. With one rating there is nothing to learn about a user's taste, but `mu + b_u +
+b_i` is still a competent predictor, so the model degrades to a good baseline rather than
+to noise. Content-based has no such floor: with one rated film the profile *is* that film's
+feature vector, and a globally-fitted calibration turns that into confident, wrong
+predictions.
+
+The one thing content-based does keep is reach — 43% catalogue coverage at a single rating,
+against 3% for matrix factorisation. So the honest version of the original claim is that
+content-based survives cold start in *coverage*, not in accuracy or ranking.
+
+A detail that acts as a correctness check: at one rating, item-kNN (ranking-tuned) scores
+exactly the same RMSE as the item-mean baseline, 1.0752. It uses user centring, so with a
+single rating the user's mean equals that rating, every deviation is zero, and the model
+correctly falls back to its shrunk item mean.
+
+**This undercuts the hybrid as specified.** The plan was content-heavy for sparse profiles
+and CF-heavy for dense ones. On this data content is worst exactly where it was meant to
+be strongest, so a density-weighted blend towards content would make sparse users worse,
+not better. The hybrid needs rethinking before it is built rather than after.
+
 ### Why not a random split
 
 `results/split_ablation.csv` runs the identical pipeline under both splits. Every model
@@ -320,7 +370,7 @@ src/models/similarity.py centring, cosine and shrinkage for item-kNN
 src/evaluation/          metrics.py (accuracy), ranking.py, harness.py, bootstrap.py
 src/experiments/         registry.py builds models; run_*.py run a config and dump CSVs
 src/experiments/recommend.py  the demo CLI, films rather than decimals
-src/plots/               scripts that read CSVs and write figures
+src/plots/               style.py plus scripts that read CSVs and write figures
 tests/                   pytest, run locally; no CI
 results/                 committed CSVs, the report's source of truth
 figures/                 committed figures
