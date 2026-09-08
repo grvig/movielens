@@ -23,6 +23,7 @@ from src.models.baselines import ItemMean
 from src.models.baselines import MostPopular
 from src.models.baselines import UserMean
 from src.models.content import ContentBased
+from src.models.hybrid import WeightedHybrid
 from src.models.item_knn import ItemKNN
 from src.models.mf import MatrixFactorization
 
@@ -36,6 +37,8 @@ MODEL_ORDER = [
     "item_knn_ranking",
     "mf",
     "mf_ranking",
+    "hybrid",
+    "hybrid_frontier",
 ]
 
 
@@ -69,6 +72,32 @@ def build_model(name, config, items, validation=None, cache=False):
             patience=params["patience"],
             validation=validation,
             cache=cache,
+        )
+    if name == "hybrid":
+        params = config.model_params("hybrid")
+        model = WeightedHybrid(
+            config,
+            ContentBased(config, items, validation=validation),
+            MatrixFactorization(config, validation=validation, cache=cache),
+            weight_mode="density",
+            validation=None,
+            name=name,
+        )
+        # The curve was fitted on validation by run_hybrid and recorded in the config, so
+        # fitting the model does not refit it. Refitting per run would make the model's
+        # behaviour depend on which experiment happened to construct it.
+        model.intercept = float(params["curve_intercept"])
+        model.slope = float(params["curve_slope"])
+        return model
+    if name == "hybrid_frontier":
+        params = config.model_params("hybrid_frontier")
+        return WeightedHybrid(
+            config,
+            ContentBased(config, items, validation=validation),
+            MatrixFactorization(config, validation=validation, cache=cache),
+            weight_mode="fixed",
+            fixed_weight=float(params["fixed_weight"]),
+            name=name,
         )
     raise ValueError("unknown model: " + name)
 

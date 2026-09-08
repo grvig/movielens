@@ -86,6 +86,13 @@ models:
     n_epochs: 60
     patience: 5
     init_scale: 0.1
+  # Density-weighted blend of content and matrix factorisation. The curve is fitted on
+  # validation by run_hybrid and copied here by hand; w(n) = sigmoid(a + b*log(1+n)) is
+  # the share given to the content model for a user with n training ratings.
   hybrid:
-    curve_intercept: 0.0
-    curve_slope: 0.0
+    curve_intercept: 1.9691
+    curve_slope: -0.55
+  # Fixed-weight blend at the point on the validation frontier that buys the most coverage
+  # for at most 0.02 RMSE against the pure collaborative end.
+  hybrid_frontier:
+    fixed_weight: 0.4

@@ -18,6 +18,7 @@ from src.models.baselines import ItemMean
 from src.models.baselines import MostPopular
 from src.models.baselines import UserMean
 from src.models.content import ContentBased
+from src.models.hybrid import WeightedHybrid
 from src.models.item_knn import ItemKNN
 from src.models.mf import MatrixFactorization
 
@@ -37,6 +38,14 @@ MODEL_FACTORIES = {
     "mf": lambda config, items: MatrixFactorization(config, n_epochs=5),
     "mf_ranking": lambda config, items: MatrixFactorization(
         config, name="mf_ranking", n_epochs=5
+    ),
+    "hybrid": lambda config, items: WeightedHybrid(
+        config, ContentBased(config, items), MatrixFactorization(config, n_epochs=5),
+        weight_mode="density", name="hybrid",
+    ),
+    "hybrid_frontier": lambda config, items: WeightedHybrid(
+        config, ContentBased(config, items), MatrixFactorization(config, n_epochs=5),
+        weight_mode="fixed", fixed_weight=0.4, name="hybrid_frontier",
     ),
 }
 
@@ -183,8 +192,9 @@ def test_shrinkage_pulls_sparse_biases_towards_zero(config, synthetic_ratings):
 
 def test_every_model_family_is_covered():
     """A new model family that is not registered here is not actually being checked."""
-    assert len(MODEL_FACTORIES) == 9
+    assert len(MODEL_FACTORIES) == 11
     assert set(MODEL_FACTORIES.keys()) == {
         "global_mean", "user_mean", "item_mean", "most_popular", "content",
         "item_knn", "item_knn_ranking", "mf", "mf_ranking",
+        "hybrid", "hybrid_frontier",
     }

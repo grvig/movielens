@@ -31,9 +31,11 @@ MODEL_COLOURS = {
     "item_knn_ranking": "#26418f",
     "mf": "#8c3025",
     "mf_ranking": "#8c3025",
+    "hybrid": "#6a3d9a",
+    "hybrid_frontier": "#6a3d9a",
 }
 
-DASHED_MODELS = ["item_knn_ranking", "mf_ranking"]
+DASHED_MODELS = ["item_knn_ranking", "mf_ranking", "hybrid_frontier"]
 
 MODEL_LABELS = {
     "global_mean": "Global mean",
@@ -45,6 +47,8 @@ MODEL_LABELS = {
     "item_knn_ranking": "Item-kNN (ranking)",
     "mf": "MF",
     "mf_ranking": "MF (ranking)",
+    "hybrid": "Hybrid (density)",
+    "hybrid_frontier": "Hybrid (w=0.4)",
 }
 
 

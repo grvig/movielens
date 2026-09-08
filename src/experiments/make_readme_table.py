@@ -39,6 +39,8 @@ MODEL_LABELS = {
     "item_knn_ranking": "Item-kNN (ranking-tuned)",
     "mf": "Matrix factorisation (RMSE-tuned)",
     "mf_ranking": "Matrix factorisation (ranking-tuned)",
+    "hybrid": "Hybrid (density-weighted)",
+    "hybrid_frontier": "Hybrid (fixed w=0.4)",
 }
 
 
