@@ -18,10 +18,11 @@ The claim the repository exists to support, as the results now stand:
 > Matrix factorisation wins on rating accuracy while concentrating on a narrow slice of the
 > catalogue; content-based scoring is 15% worse on RMSE and spreads three times wider.
 
-One part of this is still a prediction rather than a finding: that a hybrid weighted by
-profile density beats both at the crossover. The other prediction — that content-based
-scoring survives cold users better than collaborative filtering — has now been tested and
-**is false on this dataset**. See [Cold start](#cold-start).
+Both of the plan's original predictions have now been tested. **The hybrid one held**: a
+density-weighted blend does beat both of its components, and the weighting curve slopes the
+way the plan expected — content-heavy for sparse profiles, CF-heavy for dense. **The
+cold-start one did not**: content-based scoring is the *worst* model when a user has almost
+no history, not the best. See [The hybrid](#the-hybrid) and [Cold start](#cold-start).
 
 <details>
 <summary>What this replaced, and why</summary>
@@ -97,6 +98,14 @@ python -m src.experiments.run_bootstrap
 
 Resamples users 1000 times to put confidence intervals on every pairwise difference, so
 the report can say a gap is real rather than assert it.
+
+```bash
+python -m src.experiments.run_hybrid
+python -m src.plots.plot_hybrid
+```
+
+Fits the density weighting curve and sweeps the fixed-weight frontier, both on validation.
+Like the tuning sweeps it prints the constants rather than editing the config.
 
 ```bash
 python -m src.experiments.run_cold_start
@@ -196,8 +205,10 @@ and asserts the test-split numbers of the models that ignore validation do not m
 | Item-kNN (ranking-tuned) | 1.1153 | 0.8754 | 0.0455 | 0.0367 | 0.3740 | 0.8133 | 0.9097 |
 | Matrix factorisation (RMSE-tuned) | 0.9877 | 0.7812 | 0.0267 | 0.0261 | 0.1460 | 0.5816 | 0.9727 |
 | Matrix factorisation (ranking-tuned) | 1.0102 | 0.7991 | 0.0451 | 0.0403 | 0.1410 | 0.8976 | 0.9690 |
+| Hybrid (density-weighted) | 1.0132 | 0.8044 | 0.0333 | 0.0296 | 0.3683 | 0.6729 | 0.8966 |
+| Hybrid (fixed w=0.4) | 1.0179 | 0.8090 | 0.0339 | 0.0311 | 0.2990 | 0.6889 | 0.9173 |
 
-Test split: 20000 held-out ratings; ranking metrics averaged over the 906 users with at least one relevant held-out item. Seed 20260903, run 20260905T071948.
+Test split: 20000 held-out ratings; ranking metrics averaged over the 906 users with at least one relevant held-out item. Seed 20260903, run 20260908T133408.
 
 Lower is better for RMSE, MAE and the two popularity columns. Higher is better for precision, recall and coverage.
 <!-- RESULTS_TABLE_END -->
@@ -280,6 +291,56 @@ So: most-popular's advantage on precision is real against every personalised mod
 including the ranking-tuned ones; matrix factorisation's RMSE win over item-kNN is real;
 and the selection-criterion trade-off is real in both directions — the ranking-tuned
 variants really do rank better and really are less accurate.
+
+### The hybrid
+
+`results/hybrid_weights.csv`, `results/hybrid_frontier.csv`, `figures/hybrid.pdf`. Both
+hybrids blend content and matrix factorisation scores, z-scored per user because cosine
+similarities and predicted ratings are not on the same scale. Weights are fitted on
+validation.
+
+**The blend beats both of its components in every density bin.** Validation precision@10:
+
+| history | users | best content weight | blended | pure MF | pure content |
+|---|---|---|---|---|---|
+| 1–20 | 155 | 0.7 | **0.0039** | 0.0032 | 0.0032 |
+| 21–40 | 220 | 0.4 | **0.0145** | 0.0068 | 0.0064 |
+| 41–100 | 247 | 0.3 | **0.0312** | 0.0190 | 0.0138 |
+| 101–250 | 213 | 0.5 | **0.0399** | 0.0207 | 0.0211 |
+| 251+ | 29 | 0.2 | **0.0621** | 0.0483 | 0.0414 |
+
+The fitted curve is `w(n) = sigmoid(1.9691 − 0.55·log(1+n))` — content weight falls from
+0.59 at ~17 ratings to 0.24 at ~282. That is the crossover the plan predicted, and it
+survives onto the test split: the density hybrid scores precision@10 of 0.0333 against
+0.0267 for matrix factorisation and 0.0201 for content-based.
+
+This is worth stating carefully, because it contradicts what the cold-start results seemed
+to imply. Content-based loses to matrix factorisation in *every* density bin taken alone.
+Blending it in still helps, because blending exploits **decorrelated errors**, not the
+superiority of one component. "A is worse than B everywhere" does not imply "adding A to B
+cannot help", and reasoning from the first to the second is the mistake this experiment
+was almost skipped over.
+
+The frontier panel makes the same point on one axis: precision@10 peaks in the *middle* of
+the weight sweep, not at either end.
+
+| weight | val RMSE | val P@10 | val coverage@10 |
+|---|---|---|---|
+| 0.0 (pure MF) | **0.9483** | 0.0145 | 0.1422 |
+| 0.4 | 0.9675 | **0.0234** | 0.2940 |
+| 1.0 (pure content) | 1.0612 | 0.0127 | **0.4502** |
+
+**The honest limitation.** The hybrid beats its own components, but it does not beat the
+best single models in this repository. Item-kNN alone reaches precision@10 of 0.0357 at
+RMSE 1.0162 with 0.3378 coverage — matching or beating the density hybrid's 0.0333 / 1.0132
+/ 0.3683 on nearly every axis, with one model instead of two. And nothing here beats
+most-popular's 0.0657 on precision. So the hybrid validates the *mechanism* the plan
+described without producing the best recommender in the comparison, and the report should
+say so rather than presenting it as the winner.
+
+The validation gains were also larger than the test gains — +61% precision over pure MF on
+validation against +27% on test — so some of the validation improvement was selection
+noise, as expected when a weight is chosen on the same split it is measured on.
 
 ### Cold start
 
