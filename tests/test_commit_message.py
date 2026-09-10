@@ -49,11 +49,21 @@ def test_an_over_long_subject_is_rejected():
 def test_an_attribution_trailer_is_rejected():
     message = "Added the harness\n\nCo-Authored-By: Someone <a@b.c>\n"
     problems = check(message)
-    assert any("banned pattern" in problem for problem in problems)
+    assert any("attribution trailer" in problem for problem in problems)
+
+
+def test_an_unfamiliar_trailer_shape_is_also_rejected():
+    """Trailers are matched by shape, so one never seen before still fails."""
+    assert len(check("Added it\n\nReviewed-By: Someone\n")) > 0
+    assert len(check("Added it\n\nSigned-off-by: Someone\n")) > 0
 
 
 def test_a_generated_with_line_is_rejected():
     assert len(check("Added it\n\nGenerated with a tool\n")) > 0
+
+
+def test_an_assistance_credit_is_rejected():
+    assert len(check("Added it\n\nAssisted by a tool\n")) > 0
 
 
 def test_the_check_is_case_insensitive():

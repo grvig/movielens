@@ -13,18 +13,21 @@ rebase.
 **No attribution trailers.** A trailer that reaches a public remote can only be removed by
 rewriting history, and rewriting history duplicates every commit in GitHub's contribution
 graph. Catching it here costs nothing; catching it after a push cost two repository
-recreations.
+recreations. Trailers are matched by shape rather than by name, so the rule keeps working
+for ones this project has never seen.
 """
 
 import re
 import sys
 from pathlib import Path
 
+# Attribution trailers, matched by shape rather than by naming any particular tool: any
+# "Something-By:" line, and the phrasings that usually accompany one. Matching the shape
+# means the rule keeps working for trailers this project has never seen.
 BANNED_PATTERNS = [
-    r"co-authored-by:",
-    r"generated with",
-    r"\bclaude\b",
-    r"\banthropic\b",
+    (r"^[a-z][a-z-]*-by:", "an attribution trailer"),
+    (r"generated with", "a generated-with line"),
+    (r"assisted by", "an assistance credit"),
 ]
 MAX_SUBJECT_LENGTH = 90
 
@@ -64,10 +67,10 @@ def check(message):
         )
 
     lowered = message.lower()
-    for pattern in BANNED_PATTERNS:
-        if re.search(pattern, lowered):
+    for pattern, description in BANNED_PATTERNS:
+        if re.search(pattern, lowered, flags=re.MULTILINE):
             problems.append(
-                "the message matches the banned pattern " + repr(pattern)
+                "the message looks like it contains " + description
                 + "; this project carries no attribution trailers"
             )
     return problems
