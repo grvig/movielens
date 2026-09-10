@@ -5,15 +5,16 @@ not a recommender; it is the comparison. Four approaches are pushed through an i
 split, an identical candidate set and an identical metric suite, so we can say precisely
 where each one wins and what it pays for the win.
 
-Two of the four are registered twice, tuned once for accuracy and once for ranking, because
-the two criteria select different hyperparameters for the same algorithm. Nine models in
-total.
+Two of the four are registered twice, tuned once for accuracy and once for ranking,
+because the two criteria select different hyperparameters for the same algorithm, and
+the hybrid is registered twice as well — once weighted by profile density and once at a
+fixed point on the accuracy-coverage frontier. Eleven models in total.
 
 The claim the repository exists to support, as the results now stand:
 
 > Under one protocol, **no personalised model beats a popularity baseline on precision@10**
 > — and the reason is that precision@10 largely measures popularity rather than accuracy
-> (r = 0.91 against popularity bias, 0.49 against RMSE). Tuning an algorithm on ranking
+> (r = 0.91 against popularity bias, 0.53 against RMSE). Tuning an algorithm on ranking
 > instead of accuracy moves it *towards* the popularity baseline rather than past it.
 > Matrix factorisation wins on rating accuracy while concentrating on a narrow slice of the
 > catalogue; content-based scoring is 15% worse on RMSE and spreads three times wider.
@@ -73,7 +74,7 @@ Nothing under `data/` is committed. A fresh clone reproduces it from those two c
 python -m src.experiments.run_main
 ```
 
-Fits all nine models on train, evaluates on test, writes `results/main_results.csv` and
+Fits all eleven models on train, evaluates on test, writes `results/main_results.csv` and
 prints the comparison table. Add `--cache` to reuse stored matrix factorisation fits.
 
 ```bash
@@ -121,6 +122,25 @@ python -m src.experiments.recommend --user 1
 
 Prints each model's top-10 for one user as actual film titles, with the held-out likes
 marked. The only script here that shows recommendations rather than metrics.
+
+```bash
+python -m src.experiments.run_qualitative --history my_export.csv
+```
+
+Matches an exported watch history onto the catalogue, injects it as user 944, and prints
+what each model recommends for a real person. Accepts Letterboxd's `Name,Year,Rating`
+columns or plain `title,rating`. Unmatched titles are reported rather than dropped — a poor
+join otherwise looks exactly like a poor recommender. Note that ML-100K stops at 1998, so a
+modern history will mostly miss.
+
+```bash
+python -m src.plots.plot_main
+python -m src.plots.plot_tuning
+python -m src.plots.plot_hybrid
+python -m src.plots.plot_cold_start
+```
+
+Regenerate every figure from the committed CSVs.
 
 Experiments write CSVs into `results/`. Plotting scripts read those CSVs and write into
 `figures/`. Training code never plots — otherwise every axis-label change in the report
@@ -173,6 +193,8 @@ build each one.
 | `item_knn_ranking` | predicted rating | Same algorithm, tuned on validation precision@10. Lands on the other centring convention |
 | `mf` | predicted rating | Biases + L2, SGD, early stopping on validation. Tuned on validation RMSE |
 | `mf_ranking` | predicted rating | Same algorithm, tuned on validation precision@10. Much weaker L2 |
+| `hybrid` | blended, z-scored per user | Content + MF, weight a fitted function of the user's history length |
+| `hybrid_frontier` | blended, z-scored per user | Content + MF at a fixed w=0.4, chosen on the validation frontier |
 
 Two behaviours that read as bugs and are not:
 
@@ -208,7 +230,7 @@ and asserts the test-split numbers of the models that ignore validation do not m
 | Hybrid (density-weighted) | 1.0132 | 0.8044 | 0.0333 | 0.0296 | 0.3683 | 0.6729 | 0.8966 |
 | Hybrid (fixed w=0.4) | 1.0179 | 0.8090 | 0.0339 | 0.0311 | 0.2990 | 0.6889 | 0.9173 |
 
-Test split: 20000 held-out ratings; ranking metrics averaged over the 906 users with at least one relevant held-out item. Seed 20260903, run 20260908T133408.
+Test split: 20000 held-out ratings; ranking metrics averaged over the 906 users with at least one relevant held-out item. Seed 20260903, run 20260910T172910.
 
 Lower is better for RMSE, MAE and the two popularity columns. Higher is better for precision, recall and coverage.
 <!-- RESULTS_TABLE_END -->
@@ -225,10 +247,10 @@ Metrics reported side by side, per model:
 
 ### What the results show
 
-**precision@10 measures popularity, not accuracy.** Across the nine models, precision@10
-correlates with popularity bias at r = 0.70 and with RMSE at r = 0.08. Dropping the two
+**precision@10 measures popularity, not accuracy.** Across the eleven models, precision@10
+correlates with popularity bias at r = 0.68 and with RMSE at r = 0.11. Dropping the two
 baselines whose ranking is degenerate by construction, that becomes **r = 0.91 against
-popularity** and 0.49 against RMSE. Whatever precision@10 is rewarding on this dataset, it
+popularity** and 0.53 against RMSE. Whatever precision@10 is rewarding on this dataset, it
 is much closer to "shows popular films" than to "predicts ratings well".
 
 The tuning experiment makes this concrete rather than correlational. Selecting the *same
@@ -263,9 +285,10 @@ switches centring convention (item centring wins accuracy, user centring wins ra
 Both sweeps show the same anti-correlation — r = +0.67 for MF over 32 configs, r = +0.80
 for kNN over 48. See `results/tuning_*.csv`.
 
-One caveat on the correlations above: nine models is a small sample, and the models are not
-independent draws. Treat r = 0.91 as a description of this table rather than an estimate of
-a population parameter. The tuning sweeps, with 32 and 48 configurations each, are the
+One caveat on the correlations above: eleven models is a small sample, and the models are
+not independent draws — four of them are retuned or blended versions of the other two.
+Treat r = 0.91 as a description of this table rather than an estimate of a population
+parameter. The tuning sweeps, with 32 and 48 configurations each, are the
 better-powered version of the same claim.
 
 ### Are these gaps real?
@@ -437,11 +460,32 @@ results/                 committed CSVs, the report's source of truth
 figures/                 committed figures
 ```
 
+## Figures
+
+| File | Shows |
+|---|---|
+| `figures/accuracy.pdf` | RMSE and MAE per model |
+| `figures/tradeoff.pdf` | **The headline.** Accuracy against reach, and precision against popularity bias |
+| `figures/tuning.pdf` | Both sweeps: selecting on accuracy costs ranking, within one algorithm |
+| `figures/hybrid.pdf` | The fitted weighting curve, and the blend beating both endpoints |
+| `figures/cold_start.pdf` | How each model degrades as history shrinks |
+
 ## Development
 
 ```bash
 python -m pytest
 ```
+
+A local gate is available, since there is no CI by design:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+That runs ruff and the test suite before each commit, and checks the commit message is a
+single line with no attribution trailer. `tests/test_commit_message.py` asserts every commit
+already in this repository would pass that gate.
 
 Run experiments and tests from the repository root, so that `src` resolves:
 
@@ -455,8 +499,8 @@ dataset, so it runs in under a second and works on a clone with no `data/` direc
 `tests/test_splitting.py` is the important one — it asserts that no user's training ratings
 postdate their held-out ratings. If it fails, every number in `results/` is wrong.
 
-`tests/test_models.py` is parameterised over every model family — all nine pass the same
-contract with no exceptions. A model that needs an exception there is a model that would
+`tests/test_models.py` is parameterised over every model family — all eleven pass the
+same contract with no exceptions. A model that needs an exception there is a model that would
 quietly invalidate the comparison.
 
 `tests/test_run_main.py` drives the whole pipeline against a miniature processed directory
