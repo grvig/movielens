@@ -167,3 +167,55 @@ def test_hybrid_recommends_and_excludes_training_items(
     recommendations = model.recommend(1, 5)
     assert len(recommendations) == 5
     assert set(recommendations.tolist()).isdisjoint(seen)
+
+
+def test_fingerprint_is_stable_for_unchanged_config(config):
+    from src.models.hybrid import component_fingerprint
+
+    assert component_fingerprint(config) == component_fingerprint(config)
+
+
+def test_fingerprint_changes_when_a_component_is_retuned(config):
+    from src.models.hybrid import component_fingerprint
+
+    before = component_fingerprint(config)
+    config.values["models"]["mf"]["regularisation"] = 0.42
+    assert component_fingerprint(config) != before
+
+
+def test_fingerprint_changes_when_the_features_change(config):
+    from src.models.hybrid import component_fingerprint
+
+    before = component_fingerprint(config)
+    config.values["features"]["min_df"] = 99
+    assert component_fingerprint(config) != before
+
+
+def test_matching_fingerprint_passes(config):
+    from src.models.hybrid import check_fingerprint
+    from src.models.hybrid import component_fingerprint
+
+    check_fingerprint(config, component_fingerprint(config))
+
+
+def test_a_stale_fingerprint_fails_loudly(config):
+    from src.models.hybrid import check_fingerprint
+
+    with pytest.raises(ValueError, match="run_hybrid"):
+        check_fingerprint(config, "deadbeefdeadbeef")
+
+
+def test_an_absent_fingerprint_is_not_enforced(config):
+    """Older configs without the field must keep working."""
+    from src.models.hybrid import check_fingerprint
+
+    check_fingerprint(config, None)
+    check_fingerprint(config, "")
+
+
+def test_the_committed_config_fingerprint_is_current(config):
+    """The recorded constants must match the components actually configured."""
+    from src.models.hybrid import component_fingerprint
+
+    recorded = config.model_params("hybrid")["components"]
+    assert recorded == component_fingerprint(config)

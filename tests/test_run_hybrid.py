@@ -12,6 +12,7 @@ from src.experiments.run_hybrid import choose_frontier_weight
 from src.experiments.run_hybrid import run_density
 from src.experiments.run_hybrid import value_of
 from src.models.hybrid import WEIGHT_GRID
+from tests.conftest import refresh_hybrid_fingerprint
 
 
 @pytest.fixture
@@ -22,6 +23,7 @@ def prepared_config(config, tmp_path, synthetic_ratings, synthetic_items):
     config.values["paths"]["results_dir"] = str(tmp_path / "results")
     config.values["paths"]["fits_dir"] = str(tmp_path / "fits")
     config.values["models"]["mf"]["n_epochs"] = 3
+    refresh_hybrid_fingerprint(config)
     train, validation, test = temporal_split(synthetic_ratings, config)
     write_splits(train, validation, test, processed)
     synthetic_items.to_parquet(processed / "items.parquet", index=False)

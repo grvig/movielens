@@ -20,6 +20,7 @@ from src.experiments.registry import build_all
 from src.experiments.registry import build_model
 from src.experiments.run_main import load_items
 from src.experiments.run_main import run
+from tests.conftest import refresh_hybrid_fingerprint
 
 
 @pytest.fixture
@@ -30,6 +31,7 @@ def prepared_config(config, tmp_path, synthetic_ratings, synthetic_items):
     config.values["paths"]["results_dir"] = str(tmp_path / "results")
     config.values["paths"]["fits_dir"] = str(tmp_path / "fits")
     config.values["models"]["mf"]["n_epochs"] = 3
+    refresh_hybrid_fingerprint(config)
 
     train, validation, test = temporal_split(synthetic_ratings, config)
     write_splits(train, validation, test, processed)

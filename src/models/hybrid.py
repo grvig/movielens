@@ -23,6 +23,9 @@ Rating predictions are blended directly rather than z-scored, because both model
 return a rating on the same [1, 5] scale there and the blend stays interpretable.
 """
 
+import hashlib
+import json
+
 import numpy as np
 
 from src.models.base import Recommender
@@ -32,6 +35,38 @@ WEIGHT_MODES = ["density", "fixed"]
 DEFAULT_BINS = [(1, 20), (21, 40), (41, 100), (101, 250), (251, 100000)]
 WEIGHT_GRID = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 LOGIT_CLIP = 0.05
+
+
+def component_fingerprint(config):
+    """Hash of the settings the fitted hybrid weights depend on.
+
+    The curve constants in the config were fitted against particular content and matrix
+    factorisation settings. Retune either component and those constants are silently
+    stale: the hybrid still runs, still looks reasonable, and is wrong. Recording a
+    fingerprint alongside them turns that into a loud failure.
+    """
+    payload = {
+        "content": config.model_params("content"),
+        "mf": config.model_params("mf"),
+        "features": config.section("features"),
+        "seed": config.seed,
+    }
+    encoded = json.dumps(payload, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.md5(encoded).hexdigest()[:16]
+
+
+def check_fingerprint(config, recorded):
+    """Raise if the components have changed since the weights were fitted."""
+    if recorded is None or recorded == "":
+        return
+    current = component_fingerprint(config)
+    if current == recorded:
+        return
+    raise ValueError(
+        "the hybrid weights in configs/default.yaml were fitted against different "
+        "component settings (fingerprint " + str(recorded) + ", now " + current + "). "
+        "Re-run python -m src.experiments.run_hybrid and copy the new constants across."
+    )
 
 
 def normalise_scores(scores):

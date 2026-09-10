@@ -66,3 +66,19 @@ def synthetic_items():
             row["genre_" + name] = int(flag)
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def refresh_hybrid_fingerprint(config):
+    """Re-record the hybrid fingerprint after a test changes a component setting.
+
+    The guard in src/models/hybrid.py refuses to build a hybrid whose fitted weights were
+    recorded against different component settings. Tests that tweak a component are doing
+    deliberately what the guard exists to catch accidentally, so they re-record it - the
+    same thing a person would do after re-running run_hybrid.
+    """
+    from src.models.hybrid import component_fingerprint
+
+    fingerprint = component_fingerprint(config)
+    for section in ["hybrid", "hybrid_frontier"]:
+        config.values["models"][section]["components"] = fingerprint
+    return fingerprint

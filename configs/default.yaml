@@ -92,7 +92,11 @@ models:
   hybrid:
     curve_intercept: 1.9691
     curve_slope: -0.55
+    # Fingerprint of the component settings these constants were fitted against.
+    # Retune content or mf and building the hybrid fails until run_hybrid is redone.
+    components: 746a47cf212e03e3
   # Fixed-weight blend at the point on the validation frontier that buys the most coverage
   # for at most 0.02 RMSE against the pure collaborative end.
   hybrid_frontier:
     fixed_weight: 0.4
+    components: 746a47cf212e03e3

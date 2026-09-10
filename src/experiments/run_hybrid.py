@@ -33,6 +33,7 @@ from src.evaluation.harness import results_frame
 from src.models.content import ContentBased
 from src.models.hybrid import WEIGHT_GRID
 from src.models.hybrid import WeightedHybrid
+from src.models.hybrid import component_fingerprint
 from src.models.hybrid import weight_for_history
 from src.models.mf import MatrixFactorization
 from src.experiments.run_main import load_items
@@ -143,7 +144,10 @@ def main():
     print("")
     print("frontier weight within " + format(RMSE_TOLERANCE, ".2f")
           + " RMSE of pure CF: w=" + format(chosen, ".1f"))
-    print("Write it into configs/default.yaml by hand; this script does not edit it.")
+    print("")
+    print("components fingerprint: " + component_fingerprint(config))
+    print("Write the constants and the fingerprint into configs/default.yaml by hand;")
+    print("this script does not edit it. The fingerprint makes a stale curve fail loudly.")
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ from src.models.baselines import MostPopular
 from src.models.baselines import UserMean
 from src.models.content import ContentBased
 from src.models.hybrid import WeightedHybrid
+from src.models.hybrid import check_fingerprint
 from src.models.item_knn import ItemKNN
 from src.models.mf import MatrixFactorization
 
@@ -75,6 +76,7 @@ def build_model(name, config, items, validation=None, cache=False):
         )
     if name == "hybrid":
         params = config.model_params("hybrid")
+        check_fingerprint(config, params.get("components"))
         model = WeightedHybrid(
             config,
             ContentBased(config, items, validation=validation),
@@ -91,6 +93,7 @@ def build_model(name, config, items, validation=None, cache=False):
         return model
     if name == "hybrid_frontier":
         params = config.model_params("hybrid_frontier")
+        check_fingerprint(config, params.get("components"))
         return WeightedHybrid(
             config,
             ContentBased(config, items, validation=validation),
