@@ -19,3 +19,8 @@ venv/
 # OS noise
 .DS_Store
 Thumbs.db
+
+# Output of run_qualitative derives from someone's personal watch history, and the
+# input export is personal data. Neither belongs in a shared repository.
+results/qualitative.csv
+*letterboxd*.csv
