@@ -1,0 +1,39 @@
+# Local quality gate. There is no CI on this project by design, so this is the only thing
+# standing between a bad commit and the shared branch.
+#
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run against everything once with: pre-commit run --all-files
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-added-large-files
+        # The dataset is downloaded, never committed. This is the backstop for that rule.
+        args: ["--maxkb=2048"]
+      - id: check-merge-conflict
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.7
+    hooks:
+      - id: ruff
+        args: ["--fix"]
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: python -m pytest -q
+        language: system
+        pass_filenames: false
+        stages: [pre-commit]
+
+      - id: no-ai-attribution
+        name: no attribution trailers
+        entry: python scripts/check_commit_message.py
+        language: system
+        stages: [commit-msg]
