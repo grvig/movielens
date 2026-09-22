@@ -504,4 +504,4 @@ diagnostic and written up as a limitation.
 | B | baselines & content | four baselines, TF-IDF features, content model, qualitative check |
 | C | collaborative filtering | item-kNN, matrix factorisation, hyperparameter sweeps |
 
-The hybrid is joint work, since it needs both a tuned MF and a working content model.
+The hybrid is joint work, since it needs both a tuned MF and a working content model. archetiucier requirement change
